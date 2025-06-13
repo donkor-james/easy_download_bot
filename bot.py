@@ -9,23 +9,26 @@ from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup, 
 import yt_dlp
 import glob
 import shutil
+from flask import Flask
+from threading import Thread
+from dotenv import load_dotenv
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+load_dotenv()
+API_ID = os.getenv("API_ID")
+API_HASH = os.getenv("API_HASH")
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+ADMIN_USER_IDS = [int(os.getenv("ADMIN_USER_IDS"))]
 
-# Bot credentials - Replace with your actual values
-API_ID = "24671678"  # Get from https://my.telegram.org
-API_HASH = "6dc0b4d7bd58e1d86d9003c6fe936f65"  # Get from https://my.telegram.org
-BOT_TOKEN = "8104327439:AAEWt4rUzMd7Ie1RPSeAbZsytg1P1_cUzio"
-
-# Admin configuration - Add your user ID here
-ADMIN_USER_IDS = [1176429833]  # Replace with your actual user ID(s)
+print(ADMIN_USER_IDS, type(ADMIN_USER_IDS[0]))
 
 # Data files
 USERS_DATA_FILE = "users_data.json"
 VIDEOS_DATA_FILE = "videos_data.json"
 BOT_DATA_FILE = "bot_data.json"
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Initialize bot
 app = Client(
@@ -34,6 +37,19 @@ app = Client(
     api_hash=API_HASH,
     bot_token=BOT_TOKEN
 )
+
+flask_app = Flask(__name__)
+
+
+@flask_app.route('/')
+def home():
+    return "Video Downloader Bot is running!"
+
+
+def run_flask():
+    """Run Flask app in a separate thread"""
+    flask_app.run(host='0.0.0.0', port=5000)
+
 
 # Data management functions
 
@@ -274,7 +290,7 @@ async def start_command(client: Client, message: Message):
 👋 **Welcome to the your number one Youtube video Downloader Bot!**
 
 ⚠️ **Daily Limits:**
-• Maximum {limits.max_videos_per_user} videos per user per day
+• Maximum {limits.max_videos_per_user} videos per user a day
 
 📱 **How to use:**
 • send a video URL from Youtube.
@@ -283,7 +299,7 @@ async def start_command(client: Client, message: Message):
 
 🔄 **Limits reset daily at midnight UTC**
 
-    use /help for more information and useful.
+use /help for more information and useful.
     """
 
     await message.reply_text(welcome_text)
@@ -306,7 +322,6 @@ async def stats_command(client: Client, message: Message):
 
 📋 **Daily Limits:**
 • Max videos per user: {limits.max_videos_per_user}  
-• Max total downloads: {limits.max_total_daily_downloads}
 
 🕐 **Resets:** Daily at midnight UTC
     """
@@ -337,7 +352,6 @@ async def admin_stats_command(client: Client, message: Message):
 
 📊 **Overall Stats:**
 • Total Users: {total_users}
-• Total Videos Downloaded: {total_videos}
 • Bot Running Since: {stats['bot_start_date']}
 • All-time Downloads: {stats['total_downloads_all_time']}
 
@@ -578,7 +592,7 @@ async def help_command(client: Client, message: Message):
 • /help - Show this help message
 
 ⚠️ **Limits (Free Plan):**
-• Max 5 minutes video duration
+• Max 8 minutes video duration
 • Max 50MB file size
 
 🔄 **Limits reset daily at midnight UTC**
@@ -590,6 +604,9 @@ async def help_command(client: Client, message: Message):
     """
 
     await message.reply_text(help_text)
+
+
+progress_data = {}
 
 
 @app.on_message(filters.text & ~filters.command([]))
@@ -674,9 +691,9 @@ async def handle_url(client: Client, message: Message):
             f"🎵 **Video Found:**\n"
             f"📺 {title[:50]}...\n"
             f"⏳ Duration: {duration_str}\n\n"
-            f"📊 **Remaining today:** {stats['remaining_downloads']} downloads\n"
+            # f"📊 **Remaining today:** {stats['remaining_downloads']} downloads\n"
             f"👤 **Your remaining:** {limits.max_videos_per_user - limits.bot_data['user_downloads_today'].get(str(user_id), 0)} videos\n\n"
-            f"⚠️ **Free Plan:** Choose 360p for best performance",
+            f"⚠️ Choose 360p for best performance",
             reply_markup=reply_markup
         )
 
@@ -685,9 +702,182 @@ async def handle_url(client: Client, message: Message):
         await message.reply_text("❌ Unable to process this video. Please try a different URL.")
 
 
+def progress_hook(d, user_id):
+    """Synchronous progress hook for yt-dlp"""
+    try:
+        if d['status'] == 'downloading':
+            # Store progress data globally
+            downloaded = d.get('downloaded_bytes', 0)
+            total = d.get('total_bytes') or d.get('total_bytes_estimate', 0)
+            speed = d.get('speed', 0)
+            eta = d.get('eta', 0)
+
+            progress_data[user_id] = {
+                'status': 'downloading',
+                'downloaded': downloaded,
+                'total': total,
+                'speed': speed,
+                'eta': eta,
+                'last_update': time.time()
+            }
+
+        elif d['status'] == 'finished':
+            file_size = d.get('total_bytes', 0)
+            progress_data[user_id] = {
+                'status': 'finished',
+                'file_size': file_size,
+                'last_update': time.time()
+            }
+
+    except Exception as e:
+        logging.error(f"Progress hook error: {e}")
+
+
+def create_progress_bar(percentage):
+    """Create a visual progress bar"""
+    filled = int(percentage / 10)
+    empty = 10 - filled
+    bar = "🟩" * filled + "⬜" * empty
+    return f"[{bar}] {percentage:.1f}%"
+
+
+def create_animated_progress_bar(current_time):
+    """Create animated progress bar for unknown total size"""
+    # Create a moving green block animation
+    position = int(current_time * 2) % 10
+    bar = ["⬜"] * 10
+    bar[position] = "🟩"
+    return "".join(bar)
+
+
+def format_bytes(bytes_value):
+    """Convert bytes to human readable format"""
+    if bytes_value == 0:
+        return "0B"
+
+    for unit in ['B', 'KB', 'MB', 'GB']:
+        if bytes_value < 1024.0:
+            return f"{bytes_value:.1f}{unit}"
+        bytes_value /= 1024.0
+    return f"{bytes_value:.1f}TB"
+
+
+def format_speed(speed):
+    """Format download speed"""
+    if speed is None or speed == 0:
+        return "0 B/s"
+    return f"{format_bytes(speed)}/s"
+
+
+def format_eta(eta):
+    """Format estimated time remaining"""
+    if eta is None or eta == 0:
+        return "Unknown"
+
+    if eta < 60:
+        return f"{int(eta)}s"
+    elif eta < 3600:
+        return f"{int(eta//60)}m {int(eta%60)}s"
+    else:
+        hours = int(eta // 3600)
+        minutes = int((eta % 3600) // 60)
+        return f"{hours}h {minutes}m"
+
+
+async def update_progress(callback_query, user_id, start_time):
+    """Async function to update progress messages"""
+    last_message_update = 0
+
+    while user_id in progress_data:
+        try:
+            current_time = time.time()
+
+            # Update every 3 seconds to avoid rate limiting
+            if current_time - last_message_update < 3:
+                await asyncio.sleep(1)
+                continue
+
+            data = progress_data.get(user_id)
+            if not data:
+                await asyncio.sleep(1)
+                continue
+
+            if data['status'] == 'downloading':
+                downloaded = data['downloaded']
+                total = data['total']
+                speed = data['speed']
+                eta = data['eta']
+
+                elapsed = current_time - start_time
+                elapsed_str = f"{int(elapsed//60)}m {int(elapsed%60)}s"
+
+                if total > 0:
+                    percentage = (downloaded / total) * 100
+                    progress_bar = create_progress_bar(percentage)
+
+                    progress_text = (
+                        f"📥 **Downloading Video...**\n\n"
+                        f"{progress_bar}\n\n"
+                        f"📊 **Progress:** {percentage:.1f}%\n"
+                        # f"📦 **Downloaded:** {format_bytes(downloaded)}\n"
+                        # f"📏 **Total Size:** {format_bytes(total)}\n"
+                        # f"🚀 **Speed:** {format_speed(speed)}\n"
+                        # f"⏰ **ETA:** {format_eta(eta)}\n"
+                        # f"⏱️ **Elapsed:** {elapsed_str}\n\n"
+                        f"💡 *Please wait while we download your video...*"
+                    )
+                else:
+                    # When total size is unknown
+                    animated_bar = create_animated_progress_bar(current_time)
+
+                    progress_text = (
+                        f"📥 **Downloading Video**\n\n"
+                        f"{animated_bar}\n\n"
+                        # f"🔄 {'█' * (int(current_time) % 10 + 1)}\n\n"
+                        # f"📦 **Downloaded:** {format_bytes(downloaded)}\n"
+                        # f"🚀 **Speed:** {format_speed(speed)}\n"
+                        # f"⏱️ **Elapsed:** {elapsed_str}\n\n"
+                        # f"💡 *Calculating total size...*"
+                    )
+
+                try:
+                    await callback_query.edit_message_text(progress_text)
+                    last_message_update = current_time
+                except Exception as e:
+                    # Handle rate limiting or other Telegram errors
+                    if "MESSAGE_NOT_MODIFIED" not in str(e):
+                        logging.error(f"Message update error: {e}")
+
+            elif data['status'] == 'finished':
+                file_size = data['file_size']
+                elapsed = current_time - start_time
+
+                progress_text = (
+                    f"✅ **Download Complete!**\n\n"
+                    f"[██████████] 100%\n\n"
+                    f"📁 **File Size:** {format_bytes(file_size)}\n"
+                    f"⏱️ **Total Time:** {int(elapsed//60)}m {int(elapsed%60)}s\n\n"
+                    f"⬆️ **Now uploading to Telegram...**"
+                )
+
+                try:
+                    await callback_query.edit_message_text(progress_text)
+                except:
+                    pass
+                break
+
+            await asyncio.sleep(1)
+
+        except Exception as e:
+            logging.error(f"Progress update error: {e}")
+            await asyncio.sleep(2)
+
+# Modified download_video function
+
+
 @app.on_callback_query(filters.regex("^download_"))
 async def download_video(client: Client, callback_query: CallbackQuery):
-    """Handle video download with strict resource management"""
+    """Handle video download with real-time progress updates"""
     await callback_query.answer()
 
     user_id = callback_query.from_user.id
@@ -711,8 +901,18 @@ async def download_video(client: Client, callback_query: CallbackQuery):
     # Mark download as started
     limits.start_download(user_id)
 
+    # Initialize progress data
+    progress_data[user_id] = {'status': 'preparing'}
+    start_time = time.time()
+
     try:
-        await callback_query.edit_message_text("⏳ Starting download... This may take a few minutes on free plan.")
+        # Show initial message
+        await callback_query.edit_message_text(
+            f"🔄 **Preparing Download...**\n\n"
+            f"📺 **Video:** {video_info.get('title', 'Unknown')[:50]}...\n"
+            f"📏 **Quality:** {format_code}\n\n"
+            f"⏳ *Setting up download...*"
+        )
 
         # Format mapping optimized for free plan
         format_mapping = {
@@ -740,34 +940,58 @@ async def download_video(client: Client, callback_query: CallbackQuery):
         filename = f"{safe_title}_{timestamp}.%(ext)s"
         filepath_template = os.path.join(downloads_dir, filename)
 
-        # Download options optimized for free plan
+        # Download options with progress hook
         ydl_opts = {
             'format': format_id,
             'outtmpl': filepath_template,
             'quiet': True,
             'no_warnings': True,
             'prefer_insecure': True,
-            'concurrent_fragment_downloads': 1,  # Reduce CPU usage
+            'concurrent_fragment_downloads': 1,
+            # Pass user_id
+            'progress_hooks': [lambda d: progress_hook(d, user_id)],
             'http_headers': {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             },
-            'socket_timeout': 90,  # Increased for slow processing
-            'retries': 1,  # Reduce retries to save resources
+            'socket_timeout': 90,
+            'retries': 1,
             'fragment_retries': 1,
-            'buffersize': 1024,  # Smaller buffer to reduce memory usage
-            'http_chunk_size': 1048576,  # 1MB chunks to reduce memory
+            'buffersize': 1024,
+            'http_chunk_size': 1048576,
             'no_check_certificate': True,
-            'prefer_ffmpeg': False  # Avoid ffmpeg if possible to save resources
+            'prefer_ffmpeg': False
         }
 
-        await callback_query.edit_message_text("📥 Downloading video... Please be patient.")
+        # Start progress updater task
+        progress_task = asyncio.create_task(
+            update_progress(callback_query, user_id, start_time))
 
-        # Download with timeout
-        try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([url])
-        except Exception as download_error:
-            await callback_query.edit_message_text(f"❌ Download failed: {str(download_error)}")
+        # Start download in a thread to avoid blocking
+        def download_in_thread():
+            try:
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    ydl.download([url])
+                return True
+            except Exception as e:
+                logging.error(f"Download thread error: {e}")
+                return False
+
+        # Run download in thread
+        loop = asyncio.get_event_loop()
+        download_success = await loop.run_in_executor(None, download_in_thread)
+
+        # Wait a bit for final progress update
+        await asyncio.sleep(2)
+
+        # Cancel progress task
+        progress_task.cancel()
+
+        # Clean up progress data
+        if user_id in progress_data:
+            del progress_data[user_id]
+
+        if not download_success:
+            await callback_query.edit_message_text("❌ Download failed. Please try again.")
             limits.complete_download(user_id, success=False)
             return
 
@@ -787,20 +1011,26 @@ async def download_video(client: Client, callback_query: CallbackQuery):
             file_size_mb = file_size / (1024 * 1024)
 
             # Check file size limit for free plan
-            if file_size_mb > 50:  # 50MB limit for free plan
+            if file_size_mb > 50:
                 await callback_query.edit_message_text(
-                    f"❌ File too large: {file_size_mb:.1f}MB\n"
-                    f"📏 Free plan limit: 50MB\n"
-                    f"Try lowest quality format."
+                    f"❌ **File Too Large**\n\n"
+                    f"📏 **File Size:** {file_size_mb:.1f}MB\n"
+                    f"🚫 **Limit:** 50MB (Free Plan)\n\n"
+                    f"💡 *Try selecting 'Lowest Quality' format*"
                 )
                 os.remove(filepath)
                 limits.complete_download(user_id, success=False)
                 return
 
-            await callback_query.edit_message_text(
-                f"📁 Downloaded! Size: {file_size_mb:.1f}MB\n"
-                f"⬆️ Uploading to Telegram..."
+            # Show upload progress
+            upload_text = (
+                f"⬆️ **Uploading to Telegram...**\n\n"
+                f"📁 **File:** {title[:40]}...\n"
+                f"📏 **Size:** {file_size_mb:.1f}MB\n"
+                f"📂 **Format:** {format_code}\n\n"
+                f"⏳ *Please wait while we upload your video...*"
             )
+            await callback_query.edit_message_text(upload_text)
 
             # Upload video
             try:
@@ -809,10 +1039,12 @@ async def download_video(client: Client, callback_query: CallbackQuery):
                 await client.send_video(
                     chat_id=callback_query.from_user.id,
                     video=filepath,
-                    caption=f"🎥 {title[:100]}\n"
-                            f"📏 Size: {file_size_mb:.1f}MB\n"
-                            f"⏳ Duration: {duration_str}\n"
-                            f"📂 Format: {format_code}",)
+                    caption=f"🎥 **{title[:100]}**\n\n"
+                            f"📏 **Size:** {file_size_mb:.1f}MB\n"
+                            f"⏳ **Duration:** {duration_str}\n"
+                            f"📂 **Quality:** {format_code}\n\n"
+                            f"✅ **Downloaded successfully!**"
+                )
 
                 # Success - save video data
                 video_data = {
@@ -837,14 +1069,22 @@ async def download_video(client: Client, callback_query: CallbackQuery):
                     limits.bot_data['user_downloads_today'].get(
                         str(user_id), 0)
 
-                await callback_query.edit_message_text(
-                    f"✅ Video uploaded successfully!\n\n"
-                    f"📊 **Remaining today**"
-                    f"👤 Your remaining: {user_remaining} videos"
+                # Final success message
+                success_text = (
+                    f"🎉 **Upload Complete!**\n\n"
+                    f"✅ **Video sent successfully**\n\n"
+                    f"📊 **Your Remaining Downloads Today:** {user_remaining}\n"
+                    f"🔄 **Limits reset daily at midnight UTC**\n\n"
+                    f"💡 *Send another URL to download more videos!*"
                 )
+                await callback_query.edit_message_text(success_text)
 
             except Exception as upload_error:
-                await callback_query.edit_message_text(f"❌ Upload failed: {str(upload_error)}")
+                await callback_query.edit_message_text(
+                    f"❌ **Upload Failed**\n\n"
+                    f"🚫 **Error:** {str(upload_error)}\n\n"
+                    f"💡 *Try again with a smaller file or different quality*"
+                )
                 limits.complete_download(user_id, success=False)
 
                 # Save failed video data
@@ -869,22 +1109,23 @@ async def download_video(client: Client, callback_query: CallbackQuery):
 
     except Exception as e:
         logger.error(f"Download error: {e}")
-        await callback_query.edit_message_text(f"❌ An error occurred: {str(e)}")
+        await callback_query.edit_message_text(
+            f"❌ **An Error Occurred**\n\n"
+            f"🚫 **Error:** {str(e)}\n\n"
+            f"💡 *Please try again with a different URL or quality*"
+        )
         limits.complete_download(user_id, success=False)
+
+    finally:
+        # Clean up user data and progress data
+        if user_id in user_data:
+            del user_data[user_id]
+        if user_id in progress_data:
+            del progress_data[user_id]
 
 
 def main():
-    """Main function optimized for Render free plan"""
     print("🚀 Starting Video Downloader Bot")
-    print("⚠️  Strict limits: 2 concurrent, 3 daily downloads, 2 users/day")
-    print(f"🔧 Admin users: {ADMIN_USER_IDS}")
-
-    # # Check API credentials
-    # if API_ID == "YOUR_API_ID" or API_HASH == "YOUR_API_HASH":
-    #     print("❌ ERROR: Please set your API_ID, API_HASH, and BOT_TOKEN")
-    #     print("❌ ERROR: Also set ADMIN_USER_IDS with your user ID")
-    #     return
-
     # Create necessary directories
     os.makedirs("downloads", exist_ok=True)
 
@@ -898,6 +1139,7 @@ def main():
     print("✅ Bot starting...")
 
     try:
+        Thread(target=run_flask).start()
         app.run()
     except KeyboardInterrupt:
         logger.info("Bot stopped gracefully")

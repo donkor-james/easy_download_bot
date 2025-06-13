@@ -1,9 +1,13 @@
 {
-  "last_reset_date": "2025-06-12",
-  "total_downloads_today": 0,
-  "users_today": [],
-  "user_downloads_today": {},
+  "last_reset_date": "2025-06-13",
+  "total_downloads_today": 1,
+  "users_today": [
+    1176429833
+  ],
+  "user_downloads_today": {
+    "1176429833": 1
+  },
   "total_users": 2,
-  "total_downloads_all_time": 2,
+  "total_downloads_all_time": 8,
   "bot_start_date": "2025-06-11"
 }

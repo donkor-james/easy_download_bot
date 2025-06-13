@@ -5,8 +5,8 @@
     "last_name": null,
     "username": null,
     "first_seen": "2025-06-11T12:59:11.478711",
-    "last_seen": "2025-06-12T14:13:04.269007",
-    "total_downloads": 2,
+    "last_seen": "2025-06-13T18:26:10.972898",
+    "total_downloads": 6,
     "videos_downloaded": [
       {
         "title": "Shake it to the Max (FLY) - by Moliy Music 🎧✨💎🎶",
@@ -17,6 +17,26 @@
         "title": "Hosting Companies Will HATE Me for This Video (I Saved $700/Month)",
         "url": "https://youtu.be/4Hp-diBp-2Q?si=aF98NtGNKKnIDF-N",
         "date": "2025-06-12T13:18:36.316505"
+      },
+      {
+        "title": "Hosting Companies Will HATE Me for This Video (I Saved $700/Month)",
+        "url": "https://youtu.be/4Hp-diBp-2Q?si=aF98NtGNKKnIDF-N",
+        "date": "2025-06-13T17:14:24.908739"
+      },
+      {
+        "title": "Hosting Companies Will HATE Me for This Video (I Saved $700/Month)",
+        "url": "https://youtu.be/4Hp-diBp-2Q?si=aF98NtGNKKnIDF-N",
+        "date": "2025-06-13T17:34:16.620887"
+      },
+      {
+        "title": "Hosting Companies Will HATE Me for This Video (I Saved $700/Month)",
+        "url": "https://youtu.be/4Hp-diBp-2Q?si=aF98NtGNKKnIDF-N",
+        "date": "2025-06-13T18:10:08.905951"
+      },
+      {
+        "title": "Hosting Companies Will HATE Me for This Video (I Saved $700/Month)",
+        "url": "https://youtu.be/4Hp-diBp-2Q?si=aF98NtGNKKnIDF-N",
+        "date": "2025-06-13T18:26:10.900951"
       }
     ]
   },
@@ -26,8 +46,19 @@
     "last_name": "Donkor",
     "username": "lloyd_36",
     "first_seen": "2025-06-11T13:02:20.379556",
-    "last_seen": "2025-06-12T12:41:39.102695",
-    "total_downloads": 0,
-    "videos_downloaded": []
+    "last_seen": "2025-06-13T19:14:56.635373",
+    "total_downloads": 2,
+    "videos_downloaded": [
+      {
+        "title": "Hosting Companies Will HATE Me for This Video (I Saved $700/Month)",
+        "url": "https://youtu.be/4Hp-diBp-2Q?si=aF98NtGNKKnIDF-N",
+        "date": "2025-06-13T18:52:45.182863"
+      },
+      {
+        "title": "Hosting Companies Will HATE Me for This Video (I Saved $700/Month)",
+        "url": "https://youtu.be/4Hp-diBp-2Q?si=aF98NtGNKKnIDF-N",
+        "date": "2025-06-13T19:14:56.631942"
+      }
+    ]
   }
 }
