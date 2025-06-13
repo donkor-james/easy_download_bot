@@ -944,6 +944,9 @@ async def download_video(client: Client, callback_query: CallbackQuery):
         ydl_opts = {
             'format': format_id,
             'outtmpl': filepath_template,
+            'noplaylist': True,
+            'extractaudio': False,
+            'audioformat': 'mp3',
             'quiet': True,
             'no_warnings': True,
             'prefer_insecure': True,
@@ -951,8 +954,13 @@ async def download_video(client: Client, callback_query: CallbackQuery):
             # Pass user_id
             'progress_hooks': [lambda d: progress_hook(d, user_id)],
             'http_headers': {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            },
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'en-us,en;q=0.5',
+                'Accept-Encoding': 'gzip,deflate',
+                'Accept-Charset': 'ISO-8859-1,utf-8;q=0.7,*;q=0.7',
+                'Keep-Alive': '115',
+                'Connection': 'keep-alive'},
             'socket_timeout': 90,
             'retries': 1,
             'fragment_retries': 1,
