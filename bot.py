@@ -943,6 +943,7 @@ async def download_video(client: Client, callback_query: CallbackQuery):
         # Download options with progress hook
         ydl_opts = {
             'format': format_id,
+            'cookies': 'cookies.txt',
             'outtmpl': filepath_template,
             'noplaylist': True,
             'extractaudio': False,
