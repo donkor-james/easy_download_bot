@@ -1,0 +1,33 @@
+{
+  "6215491744": {
+    "user_id": 6215491744,
+    "first_name": "Jammy",
+    "last_name": null,
+    "username": null,
+    "first_seen": "2025-06-11T12:59:11.478711",
+    "last_seen": "2025-06-12T14:13:04.269007",
+    "total_downloads": 2,
+    "videos_downloaded": [
+      {
+        "title": "Shake it to the Max (FLY) - by Moliy Music 🎧✨💎🎶",
+        "url": "https://youtube.com/shorts/rG_IE6dLFr4?si=_1IIOFgTsZhBZoyU",
+        "date": "2025-06-11T13:00:25.361380"
+      },
+      {
+        "title": "Hosting Companies Will HATE Me for This Video (I Saved $700/Month)",
+        "url": "https://youtu.be/4Hp-diBp-2Q?si=aF98NtGNKKnIDF-N",
+        "date": "2025-06-12T13:18:36.316505"
+      }
+    ]
+  },
+  "1176429833": {
+    "user_id": 1176429833,
+    "first_name": "James",
+    "last_name": "Donkor",
+    "username": "lloyd_36",
+    "first_seen": "2025-06-11T13:02:20.379556",
+    "last_seen": "2025-06-12T12:41:39.102695",
+    "total_downloads": 0,
+    "videos_downloaded": []
+  }
+}
