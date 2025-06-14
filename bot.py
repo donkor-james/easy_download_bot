@@ -1148,7 +1148,6 @@ def main():
     print("✅ Bot starting...")
 
     try:
-        Thread(target=run_flask).start()
         app.run()
     except KeyboardInterrupt:
         logger.info("Bot stopped gracefully")
@@ -1157,4 +1156,7 @@ def main():
 
 
 if __name__ == "__main__":
+    flask_thread = Thread(target=run_flask)
+    flask_thread.daemon = True
+    flask_thread.start()
     main()
