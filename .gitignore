@@ -1,0 +1,14 @@
+myeny
+.env
+*.env
+bot_data.json
+test.html
+test.xml
+*.session
+test.py
+users_data.json
+videos_data.json
+cookie.txt
+cookies.txt
+*.cookie
+session.txt
