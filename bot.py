@@ -78,10 +78,14 @@ def is_admin(user_id):
 class BotLimits:
     def __init__(self):
         self.max_concurrent_downloads = 3
-        self.max_videos_per_user = 5
-        self.max_total_daily_downloads = 470
+        self.max_videos_per_user = 8
+        self.max_total_daily_downloads = 1080
+        self.cooldown_seconds = 30  # Cooldown after each download
+        self.max_hourly_downloads = 200  # Spike protection
 
         self.active_downloads = set()  # Track active download user_ids
+        self.user_last_download_time = {}  # user_id: timestamp
+        self.hourly_downloads = []  # List of (timestamp) for last hour
 
         # Load or initialize bot data
         self.bot_data = load_json_data(BOT_DATA_FILE, {
@@ -118,35 +122,73 @@ class BotLimits:
             logger.info("Daily stats have been reset successfully")
 
     def can_user_download(self, user_id):
-        """Check if user can make a download request"""
+        """Check if user can make a download request, with cooldown and spike protection"""
+        import time
         self.reset_daily_stats_if_needed()
 
+        # Admins are exempt from daily user and download limits
+        if is_admin(user_id):
+            # Only check if already downloading, cooldown, concurrent, and spike protection
+            if user_id in self.active_downloads:
+                return False, "❌ You already have a download in progress. Please wait for it to finish."
+            now = time.time()
+            last_time = self.user_last_download_time.get(user_id, 0)
+            if now - last_time < self.cooldown_seconds:
+                wait_sec = int(self.cooldown_seconds - (now - last_time))
+                return False, f"⏳ Please wait {wait_sec} seconds before starting another download."
+            if len(self.active_downloads) >= self.max_concurrent_downloads:
+                return False, f"⏳ Server busy: Many downloads happening all at once.\nPlease try again in a few minutes."
+            one_hour_ago = now - 3600
+            self.hourly_downloads = [
+                t for t in self.hourly_downloads if t > one_hour_ago]
+            if len(self.hourly_downloads) >= self.max_hourly_downloads:
+                return False, "🚦 Too many requests at the moment. Please try again later."
+            return True, "✅ Ready to download! (Admin: limits bypassed)"
+
+        # Non-admins: all checks
         # Check if user is already downloading
         if user_id in self.active_downloads:
-            return False, "❌ You already have an active download. Please wait."
+            return False, "❌ You already have a download in progress. Please wait for it to finish."
+
+        # Check per-user cooldown
+        now = time.time()
+        last_time = self.user_last_download_time.get(user_id, 0)
+        if now - last_time < self.cooldown_seconds:
+            wait_sec = int(self.cooldown_seconds - (now - last_time))
+            return False, f"⏳ Please wait {wait_sec} seconds before starting another download."
 
         # Check concurrent downloads limit
         if len(self.active_downloads) >= self.max_concurrent_downloads:
             return False, f"⏳ Server busy: Many downloads happening all at once.\nPlease try again in a few minutes."
 
+        # Check hourly spike protection
+        one_hour_ago = now - 3600
+        self.hourly_downloads = [
+            t for t in self.hourly_downloads if t > one_hour_ago]
+        if len(self.hourly_downloads) >= self.max_hourly_downloads:
+            return False, "🚦 Too many requests at the moment. Please try again later."
+
         # Check daily total downloads limit
         if self.bot_data['total_downloads_today'] >= self.max_total_daily_downloads:
-            return False, f"📊 Daily limit reached. Maximum {self.max_total_daily_downloads} downloads per day for all users."
+            return False, "📊 The service is taking a break for today. Please come back tomorrow."
 
         # Check user's daily video limit
         user_downloads_today = self.bot_data['user_downloads_today'].get(
             str(user_id), 0)
         if user_downloads_today >= self.max_videos_per_user:
-            return False, f"🎥 You've reached your daily limit of {self.max_videos_per_user} videos."
+            return False, "🎥 You've reached your daily download limit. Please try again tomorrow."
 
-        return True, "✅ You can download"
+        return True, "✅ Ready to download!"
 
     def start_download(self, user_id):
         """Mark user as having started a download"""
+        import time
         self.active_downloads.add(user_id)
+        self.user_last_download_time[user_id] = time.time()
 
     def complete_download(self, user_id, success=True):
         """Mark download as completed"""
+        import time
         self.active_downloads.discard(user_id)
 
         if success:
@@ -160,6 +202,9 @@ class BotLimits:
             user_key = str(user_id)
             self.bot_data['user_downloads_today'][user_key] = self.bot_data['user_downloads_today'].get(
                 user_key, 0) + 1
+
+            # Add to hourly downloads
+            self.hourly_downloads.append(time.time())
 
             # Save updated data
             save_json_data(BOT_DATA_FILE, self.bot_data)
@@ -1684,6 +1729,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-50
