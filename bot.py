@@ -842,7 +842,8 @@ async def handle_url(client: Client, message: Message):
             'no_warnings': True,
             'extract_flat': False,
             'skip_download': True,
-            'cachedir': False
+            'cachedir': False,
+            'cookiefile': 'cookies.txt'
         }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -1124,7 +1125,7 @@ async def download_video(client: Client, callback_query: CallbackQuery):
         # Get video info (again, to get formats)
         logger.info(
             f"[DEBUG] Starting yt-dlp info extraction for user {user_id} url={url}")
-        with yt_dlp.YoutubeDL({'quiet': True, 'cachedir': False}) as ydl:
+        with yt_dlp.YoutubeDL({'quiet': True, 'cachedir': False, 'cookiefile': 'cookies.txt'}) as ydl:
             info_dict = ydl.extract_info(url, download=False)
             title = info_dict.get('title', 'video')
             duration = info_dict.get('duration', 0)
@@ -1458,7 +1459,7 @@ async def download_video(client: Client, callback_query: CallbackQuery):
         # Download options with progress hook
         ydl_opts = {
             'format': format_id,
-            'cookies': 'cookies.txt',
+            'cookiefile': 'cookies.txt',
             'outtmpl': filepath_template,
             'noplaylist': True,
             'quiet': True,
